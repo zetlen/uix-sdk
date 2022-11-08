@@ -11,7 +11,7 @@ governing permissions and limitations under the License.
 */
 
 /* eslint @typescript-eslint/no-explicit-any: "off" */
-import { Connection, connectToParent } from "penpal";
+import { haint } from "haint";
 import type {
   RemoteHostApis,
   HostConnection,
@@ -51,10 +51,7 @@ export type GuestEventContextChange = GuestEvent<
 /** @public */
 export type GuestEventBeforeConnect = GuestEvent<"beforeconnect">;
 /** @public */
-export type GuestEventConnected = GuestEvent<
-  "connected",
-  { connection: Connection }
->;
+export type GuestEventConnected = GuestEvent<"connected">;
 /** @public */
 export type GuestEventError = GuestEvent<"error", { error: Error }>;
 
@@ -235,21 +232,29 @@ export class Guest<
   async _connect() {
     this.emit("beforeconnect", { guest: this });
     try {
-      const connection = connectToParent<HostConnection<Incoming>>({
-        timeout: this.timeout,
-        methods: this.getLocalMethods(),
-      });
+      this.hostConnectionPromise = haint(
+        {
+          key: this.id,
+          targetOrigin: "*",
+          timeout: this.timeout,
+          remote: window.parent,
+        },
+        this.getLocalMethods()
+      ) as typeof this.hostConnectionPromise;
 
-      this.hostConnectionPromise = connection.promise;
       this.hostConnection = await this.hostConnectionPromise;
-      this.sharedContext = new SharedContext(
-        await this.hostConnection.getSharedContext()
-      );
-      this.debugLogger.log("retrieved sharedContext", this.sharedContext);
-      this.emit("connected", { guest: this, connection });
     } catch (e) {
       this.emit("error", { guest: this, error: e });
       this.debugLogger.error("Connection failed!", e);
+      return;
+    }
+    try {
+      this.sharedContext = new SharedContext(
+        await this.hostConnection.getSharedContext()
+      );
+    } catch (e) {
+      this.emit("error", { guest: this, error: e });
+      this.debugLogger.error("getSharedContext failed!", e);
     }
   }
 }

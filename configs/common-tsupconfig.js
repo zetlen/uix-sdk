@@ -20,6 +20,7 @@ const base = {
   replaceNodeEnv: true,
   legacyOutput: true,
   treeshake: "recommended",
+  noExternal: ["phantogram"]
 };
 
 const allowedModes = ["development", "production", "report"];

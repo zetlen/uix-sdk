@@ -11,7 +11,7 @@ governing permissions and limitations under the License.
 */
 
 /* eslint @typescript-eslint/no-explicit-any: "off" */
-import { haint } from "haint";
+import { phantogram } from "phantogram";
 import type {
   RemoteHostApis,
   HostConnection,
@@ -232,7 +232,7 @@ export class Guest<
   async _connect() {
     this.emit("beforeconnect", { guest: this });
     try {
-      this.hostConnectionPromise = haint(
+      this.hostConnectionPromise = phantogram(
         {
           key: this.id,
           targetOrigin: "*",

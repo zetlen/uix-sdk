@@ -20,7 +20,7 @@ import type {
   Unsubscriber,
 } from "@adobe/uix-core";
 import { Emitter } from "@adobe/uix-core";
-import { haint } from "haint";
+import { phantogram } from "phantogram";
 import { VirtualApi } from "../../uix-core/src";
 
 /**
@@ -331,20 +331,21 @@ export class Port<GuestApi>
 
   private attachFrame(iframe: HTMLIFrameElement) {
     return {
-      promise: haint<GuestProxyWrapper>({
-      key: this.id,
-      remote: iframe,
-      targetOrigin: '*',
-      timeout: this.timeout,
-    },
-      {
-        getSharedContext: () => this.sharedContext,
-        invokeHostMethod: (address: HostMethodAddress) =>
-          this.invokeHostMethod(address),
-      },
-    ),
-    destroy(){}
-    }
+      promise: phantogram<GuestProxyWrapper>(
+        {
+          key: this.id,
+          remote: iframe,
+          targetOrigin: "*",
+          timeout: this.timeout,
+        },
+        {
+          getSharedContext: () => this.sharedContext,
+          invokeHostMethod: (address: HostMethodAddress) =>
+            this.invokeHostMethod(address),
+        }
+      ),
+      destroy() {},
+    };
   }
 
   private async connect() {

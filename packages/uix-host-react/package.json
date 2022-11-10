@@ -21,8 +21,7 @@
   "bugs": "https://github.com/adobe/uix-sdk/issues",
   "dependencies": {
     "@adobe/uix-core": "^0.6.4",
-    "@adobe/uix-host": "^0.6.4",
-    "penpal": "~6.2.2"
+    "@adobe/uix-host": "^0.6.4"
   },
   "files": [
     "README.md",

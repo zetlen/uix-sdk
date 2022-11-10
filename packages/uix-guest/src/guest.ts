@@ -11,7 +11,6 @@ governing permissions and limitations under the License.
 */
 
 /* eslint @typescript-eslint/no-explicit-any: "off" */
-import { phantogram } from "phantogram";
 import type {
   RemoteHostApis,
   HostConnection,
@@ -21,6 +20,7 @@ import type {
 import {
   Emitter,
   makeNamespaceProxy,
+  phantogram,
   timeoutPromise,
   quietConsole,
 } from "@adobe/uix-core";
@@ -152,7 +152,7 @@ export class Guest<
    * {@inheritdoc SharedContext}
    */
   sharedContext: SharedContext;
-  private debugLogger: Console = quietConsole;
+  logger: Console = quietConsole;
 
   /**
    * @param config - Initializer for guest object, including ID.
@@ -163,7 +163,7 @@ export class Guest<
       this.timeout = config.timeout;
     }
     if (config.debug) {
-      this.debugLogger = debugGuest(this);
+      this.logger = debugGuest(this);
     }
     this.addEventListener("contextchange", (event) => {
       this.sharedContext = new SharedContext(event.detail.context);
@@ -195,7 +195,7 @@ export class Guest<
             error.message
           }`
         );
-        this.debugLogger.error(methodError);
+        this.logger.error(methodError);
         throw methodError;
       }
     }
@@ -207,7 +207,7 @@ export class Guest<
   protected getLocalMethods() {
     return {
       emit: (...args: Parameters<typeof this.emit>) => {
-        this.debugLogger.log(`Event "${args[0]}" emitted from host`);
+        this.logger.log(`Event "${args[0]}" emitted from host`);
         this.emit(...args);
       },
     };
@@ -245,7 +245,7 @@ export class Guest<
       this.hostConnection = await this.hostConnectionPromise;
     } catch (e) {
       this.emit("error", { guest: this, error: e });
-      this.debugLogger.error("Connection failed!", e);
+      this.logger.error("Connection failed!", e);
       return;
     }
     try {
@@ -254,7 +254,7 @@ export class Guest<
       );
     } catch (e) {
       this.emit("error", { guest: this, error: e });
-      this.debugLogger.error("getSharedContext failed!", e);
+      this.logger.error("getSharedContext failed!", e);
     }
   }
 }

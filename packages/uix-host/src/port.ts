@@ -18,10 +18,9 @@ import type {
   RemoteHostApis,
   GuestApis,
   Unsubscriber,
+  VirtualApi,
 } from "@adobe/uix-core";
-import { Emitter } from "@adobe/uix-core";
-import { phantogram } from "phantogram";
-import { VirtualApi } from "../../uix-core/src";
+import { Emitter, phantogram } from "@adobe/uix-core";
 
 /**
  * A specifier for methods to be expected on a remote interface.
@@ -154,7 +153,7 @@ export class Port<GuestApi>
   // #region Properties (13)
 
   private debug: boolean;
-  private debugLogger?: Console;
+  private logger?: Console;
   private frame: HTMLIFrameElement;
   private guest: GuestProxyWrapper;
   private hostApis: RemoteHostApis = {};
@@ -202,7 +201,7 @@ export class Port<GuestApi>
      */
     runtimeContainer: HTMLElement;
     options: PortOptions;
-    debugLogger?: Console;
+    logger?: Console;
     /**
      * Initial object to populate the shared context with. Once the guest
      * connects, it will be able to access these properties.
@@ -343,7 +342,7 @@ export class Port<GuestApi>
           invokeHostMethod: (address: HostMethodAddress) =>
             this.invokeHostMethod(address),
         }
-      ),
+      ) as Promise<GuestProxyWrapper>,
       destroy() {},
     };
   }
@@ -353,8 +352,8 @@ export class Port<GuestApi>
     this.frame.setAttribute("src", this.url.href);
     this.frame.setAttribute("data-uix-guest", "true");
     this.runtimeContainer.appendChild(this.frame);
-    if (this.debugLogger) {
-      this.debugLogger.info(
+    if (this.logger) {
+      this.logger.info(
         `Guest ${this.id} attached iframe of ${this.url.href}`,
         this
       );
@@ -363,8 +362,8 @@ export class Port<GuestApi>
     this.guest = await promise;
     this.apis = this.guest.apis || {};
     this.isLoaded = true;
-    if (this.debugLogger) {
-      this.debugLogger.info(
+    if (this.logger) {
+      this.logger.info(
         `Guest ${this.id} established connection, received methods`,
         this.apis,
         this
@@ -417,7 +416,7 @@ export class Port<GuestApi>
       try {
         methodCallee = this.getHostMethodCallee(address, privateMethods);
       } catch (e) {
-        this.debugLogger.warn("Private method not found!", address);
+        this.logger.warn("Private method not found!", address);
       }
     }
     if (!methodCallee) {

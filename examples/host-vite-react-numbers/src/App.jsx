@@ -19,11 +19,13 @@ import {
   View,
   ProgressCircle,
 } from "@adobe/react-spectrum";
-import { useExtensions } from "@adobe/uix-host-react";
+import * as UIXHostReact from "@adobe/uix-host-react";
 import React, { useEffect, useMemo, useReducer } from "react";
 import { appReducer, initialState } from "./reducer.js";
 import NumberSuggestionForm from "./NumberSuggestionForm";
 import CommentsList from "./CommentsList";
+
+const { useExtensions} = UIXHostReact;
 
 function App() {
   const [state, dispatch] = useReducer(appReducer, initialState);

@@ -12,9 +12,11 @@ governing permissions and limitations under the License.
 
 import React from "react";
 import ReactDOM from "react-dom";
-import { Extensible } from "@adobe/uix-host-react";
+import * as UIXHostReact from "@adobe/uix-host-react";
 import App from "./App";
 import "./index.css";
+
+const { Extensible } = UIXHostReact;
 
 async function main() {
   const extensionsProvider = () => fetch(REGISTRY_URL)

@@ -30,7 +30,6 @@
     "test:unit": "jest",
     "test:subtests": "npm run any test"
   },
-  "dependencies": {},
   "devDependencies": {
     "@adobe/react-spectrum": "^3.20.0",
     "@babel/core": "^7.18.10",

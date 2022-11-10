@@ -342,7 +342,7 @@ export class Port<GuestApi>
           invokeHostMethod: (address: HostMethodAddress) =>
             this.invokeHostMethod(address),
         }
-      ),
+      ) as Promise<GuestProxyWrapper>,
       destroy() {},
     };
   }

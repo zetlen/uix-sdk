@@ -1,6 +1,6 @@
 {
   "name": "@adobe/uix-core",
-  "version": "0.6.4",
+  "version": "0.7.0-4-alpha",
   "description": "Internal utilities for the UIX SDK",
   "author": "Adobe, Inc,",
   "module": "dist/esm/index.js",

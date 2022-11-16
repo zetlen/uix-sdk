@@ -10,7 +10,13 @@ OF ANY KIND, either express or implied. See the License for the specific languag
 governing permissions and limitations under the License.
 */
 
-import type { RemoteHostApis, VirtualApi } from "@adobe/uix-core";
+import {
+  GUEST_UI_ID_SUFFIX,
+  makeId,
+  RemoteHostApis,
+  TunnelOptions,
+  VirtualApi,
+} from "@adobe/uix-core";
 import {
   Guest,
   GuestConfig,
@@ -120,4 +126,13 @@ export class GuestUI<IHost extends VirtualApi> extends Guest<IHost> {
    * {@inheritDoc Guest.host}
    */
   host: RemoteHostApis<IHost>;
+  /**
+   * @inheritDoc Guest.connect
+   */
+  async connect(opts: Partial<TunnelOptions> = {}) {
+    return this._connect({
+      key: makeId(this.id, GUEST_UI_ID_SUFFIX),
+      ...opts,
+    });
+  }
 }

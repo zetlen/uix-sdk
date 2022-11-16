@@ -16,7 +16,6 @@ import type {
   HostConnection,
   NamedEvent,
   VirtualApi,
-  TunnelOptions,
 } from "@adobe/uix-core";
 import {
   Emitter,
@@ -223,14 +222,14 @@ export class Guest<
    * risks errors.
    * @public
    */
-  async connect(opts: Partial<TunnelOptions> = {}) {
-    return this._connect(opts);
+  async connect() {
+    return this._connect();
   }
 
   /**
    * @internal
    */
-  async _connect(opts: Partial<TunnelOptions> = {}) {
+  async _connect() {
     this.emit("beforeconnect", { guest: this });
     try {
       this.hostConnectionPromise = phantogram(
@@ -239,7 +238,6 @@ export class Guest<
           targetOrigin: "*",
           timeout: this.timeout,
           remote: window.parent,
-          ...opts,
         },
         this.getLocalMethods()
       ) as typeof this.hostConnectionPromise;

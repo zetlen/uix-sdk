@@ -55,5 +55,5 @@ export async function phantogram<Expected>(
     () => dataEmitter.send("disconnected", { reason: "timed out" })
   );
 }
-export { TunnelOptions };
+
 export default phantogram;

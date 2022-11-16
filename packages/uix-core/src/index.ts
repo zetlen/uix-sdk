@@ -15,7 +15,6 @@ governing permissions and limitations under the License.
  * @packageDocumentation
  */
 
-export * from "./ids";
 export * from "./debug-emitter";
 export * from "./debuglog";
 export * from "./emitter";

@@ -9,6 +9,7 @@ the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR REPRESENTA
 OF ANY KIND, either express or implied. See the License for the specific language
 governing permissions and limitations under the License.
 */
+
 import type {
   Emits,
   GuestConnection,
@@ -18,17 +19,8 @@ import type {
   GuestApis,
   Unsubscriber,
   VirtualApi,
-  TunnelOptions,
 } from "@adobe/uix-core";
-import {
-  Emitter,
-  makeId,
-  GUEST_SERVER_ID_SUFFIX,
-  GUEST_UI_ID_SUFFIX,
-  phantogram,
-} from "@adobe/uix-core";
-
-const IFRAME_HTML_ATTR_NAME = "data-uix-guest";
+import { Emitter, phantogram } from "@adobe/uix-core";
 
 /**
  * A specifier for methods to be expected on a remote interface.
@@ -230,7 +222,7 @@ export class Port<GuestApi>
         this.sharedContext = (
           (event as CustomEvent).detail as unknown as Record<string, unknown>
         ).context as Record<string, unknown>;
-        await this.connectGuestServer();
+        await this.connect();
         await this.guest.emit("contextchange", { context: this.sharedContext });
       })
     );
@@ -245,11 +237,7 @@ export class Port<GuestApi>
    * with the extension's bootstrap frame, so they can share context and events.
    */
   public attachUI(iframe: HTMLIFrameElement) {
-    const id = makeId(this.id, GUEST_UI_ID_SUFFIX);
-    iframe.setAttribute(IFRAME_HTML_ATTR_NAME, id);
-    return this.attachFrame(iframe, {
-      key: id,
-    });
+    return this.attachFrame(iframe);
   }
 
   /**
@@ -290,7 +278,7 @@ export class Port<GuestApi>
   public async load() {
     try {
       if (!this.apis) {
-        await this.connectGuestServer();
+        await this.connect();
       }
       return this.apis;
     } catch (e) {
@@ -340,10 +328,7 @@ export class Port<GuestApi>
     this.assert(this.isReady(), () => "Attempted to interact before loaded");
   }
 
-  private attachFrame(
-    iframe: HTMLIFrameElement,
-    opts: Partial<TunnelOptions> = {}
-  ) {
+  private attachFrame(iframe: HTMLIFrameElement) {
     return {
       promise: phantogram<GuestProxyWrapper>(
         {
@@ -351,7 +336,6 @@ export class Port<GuestApi>
           remote: iframe,
           targetOrigin: "*",
           timeout: this.timeout,
-          ...opts,
         },
         {
           getSharedContext: () => this.sharedContext,
@@ -363,11 +347,10 @@ export class Port<GuestApi>
     };
   }
 
-  private async connectGuestServer() {
-    const id = makeId(this.id, GUEST_SERVER_ID_SUFFIX);
+  private async connect() {
     this.frame = this.runtimeContainer.ownerDocument.createElement("iframe");
     this.frame.setAttribute("src", this.url.href);
-    this.frame.setAttribute("data-uix-guest-id", id);
+    this.frame.setAttribute("data-uix-guest", "true");
     this.runtimeContainer.appendChild(this.frame);
     if (this.logger) {
       this.logger.info(
@@ -375,9 +358,7 @@ export class Port<GuestApi>
         this
       );
     }
-    const { promise } = this.attachFrame(this.frame, {
-      key: id,
-    });
+    const { promise } = this.attachFrame(this.frame);
     this.guest = await promise;
     this.apis = this.guest.apis || {};
     this.isLoaded = true;

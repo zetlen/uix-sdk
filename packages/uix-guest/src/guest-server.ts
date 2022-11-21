@@ -11,7 +11,6 @@ governing permissions and limitations under the License.
 */
 
 import type { GuestApis } from "@adobe/uix-core";
-import { GUEST_SERVER_ID_SUFFIX, makeId } from "@adobe/uix-core";
 import type { SharedContext } from "./guest";
 import { Guest } from "./guest";
 
@@ -52,8 +51,6 @@ export class GuestServer<Outgoing extends GuestApis> extends Guest<Outgoing> {
    */
   async register(implementedMethods: Outgoing) {
     this.localMethods = implementedMethods;
-    return this._connect({
-      key: makeId(this.id, GUEST_SERVER_ID_SUFFIX),
-    });
+    return this._connect();
   }
 }

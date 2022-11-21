@@ -9,26 +9,18 @@ the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR REPRESENTA
 OF ANY KIND, either express or implied. See the License for the specific language
 governing permissions and limitations under the License.
 */
+
 import type {
   Emits,
+  GuestApis,
   GuestConnection,
   HostMethodAddress,
   NamedEvent,
   RemoteHostApis,
-  GuestApis,
   Unsubscriber,
   VirtualApi,
-  TunnelOptions,
 } from "@adobe/uix-core";
-import {
-  Emitter,
-  makeId,
-  GUEST_SERVER_ID_SUFFIX,
-  GUEST_UI_ID_SUFFIX,
-  phantogram,
-} from "@adobe/uix-core";
-
-const IFRAME_HTML_ATTR_NAME = "data-uix-guest";
+import { Emitter, phantogram } from "@adobe/uix-core";
 
 /**
  * A specifier for methods to be expected on a remote interface.
@@ -75,25 +67,6 @@ export type CapabilitySpec<T extends GuestApis> = {
  * Interface for decoupling of guest Penpal object
  * @internal
  */
-interface GuestProxyWrapper {
-  // #region Properties (1)
-
-  /**
-   * Methods from guest
-   */
-  apis: RemoteHostApis;
-
-  // #endregion Properties (1)
-
-  // #region Public Methods (1)
-
-  /**
-   * Emit an event in the guest frame
-   */
-  emit(type: string, detail: unknown): Promise<void>;
-
-  // #endregion Public Methods (1)
-}
 
 /** @public */
 type PortEvent<
@@ -116,18 +89,6 @@ export type PortEvents<
   | PortEvent<GuestApi, "hostprovide">
   | PortEvent<GuestApi, "unload">
   | PortEvent<GuestApi, "beforecallhostmethod", HostMethodAddress<HostApi>>;
-
-/** @public */
-export type PortOptions = {
-  /**
-   * Time in milliseconds to wait for the guest to connect before throwing.
-   */
-  timeout?: number;
-  /**
-   * Set true to log copiously in the console.
-   */
-  debug?: boolean;
-};
 
 const defaultOptions = {
   timeout: 10000,
@@ -158,14 +119,14 @@ export class Port<GuestApi>
   extends Emitter<PortEvents<GuestApi>>
   implements GuestConnection
 {
-  // #region Properties (13)
+  // #region Properties
 
-  private debug: boolean;
-  private logger?: Console;
-  private frame: HTMLIFrameElement;
+  private attachedFrames: Set<HTMLIFrameElement> = new Set();
+  private crypto: Crypto = window.crypto;
   private guest: GuestProxyWrapper;
   private hostApis: RemoteHostApis = {};
   private isLoaded = false;
+  private logger?: Console;
   private runtimeContainer: HTMLElement;
   private sharedContext: Record<string, unknown>;
   private subscriptions: Unsubscriber[] = [];
@@ -195,9 +156,9 @@ export class Port<GuestApi>
    */
   public url: URL;
 
-  // #endregion Properties (13)
+  // #endregion Properties
 
-  // #region Constructors (1)
+  // #region Constructors
 
   constructor(config: {
     owner: string;
@@ -220,7 +181,6 @@ export class Port<GuestApi>
     super(config.id);
     const { timeout, debug } = { ...defaultOptions, ...(config.options || {}) };
     this.timeout = timeout;
-    this.debug = debug;
     this.id = config.id;
     this.url = config.url;
     this.runtimeContainer = config.runtimeContainer;
@@ -230,26 +190,40 @@ export class Port<GuestApi>
         this.sharedContext = (
           (event as CustomEvent).detail as unknown as Record<string, unknown>
         ).context as Record<string, unknown>;
-        await this.connectGuestServer();
+        await this.attachGuestServer();
         await this.guest.emit("contextchange", { context: this.sharedContext });
       })
     );
   }
 
-  // #endregion Constructors (1)
+  // #endregion Constructors
 
-  // #region Public Methods (6)
+  // #region Public Methods
+
+  attach(url: string, existingFrame?: HTMLIFrameElement) {
+    if (existingFrame && this.attachedFrames.has(existingFrame)) {
+      return existingFrame;
+    }
+    const iframe =
+      existingFrame ||
+      this.runtimeContainer.ownerDocument.createElement("iframe");
+    const key = this.nextFrameId();
+    const connection = this.connectFrame(iframe, key);
+    this.configureFrame(iframe, key, url);
+    const { origin } = new URL(iframe.src);
+    this.attachedFrames.add(iframe);
+    return { iframe, url: iframe.src, key };
+  }
 
   /**
    * Connect an iframe element which is displaying another page in the extension
    * with the extension's bootstrap frame, so they can share context and events.
    */
-  public attachUI(iframe: HTMLIFrameElement) {
-    const id = makeId(this.id, GUEST_UI_ID_SUFFIX);
-    iframe.setAttribute(IFRAME_HTML_ATTR_NAME, id);
-    return this.attachFrame(iframe, {
-      key: id,
-    });
+  public attachUI(
+    iframe: HTMLIFrameElement,
+    frameOpts: Partial<HTMLIFrameElement> = {}
+  ) {
+    return this.attachFrame(iframe, key);
   }
 
   /**
@@ -290,7 +264,7 @@ export class Port<GuestApi>
   public async load() {
     try {
       if (!this.apis) {
-        await this.connectGuestServer();
+        await this.attachGuestServer();
       }
       return this.apis;
     } catch (e) {
@@ -314,16 +288,16 @@ export class Port<GuestApi>
    * Disconnect from the extension.
    */
   public async unload(): Promise<void> {
-    if (this.frame && this.frame.parentElement) {
-      this.frame.parentElement.removeChild(this.frame);
-      this.frame = undefined;
+    if (this.guestServerFrame && this.guestServerFrame.parentElement) {
+      this.guestServerFrame.parentElement.removeChild(this.guestServerFrame);
+      this.guestServerFrame = undefined;
     }
     this.emit("unload", { guestPort: this });
   }
 
-  // #endregion Public Methods (6)
+  // #endregion Public Methods
 
-  // #region Private Methods (6)
+  // #region Private Methods
 
   private assert(
     condition: boolean,
@@ -340,18 +314,50 @@ export class Port<GuestApi>
     this.assert(this.isReady(), () => "Attempted to interact before loaded");
   }
 
-  private attachFrame(
-    iframe: HTMLIFrameElement,
-    opts: Partial<TunnelOptions> = {}
-  ) {
-    return {
+  private attachFrame(iframe: HTMLIFrameElement, key: string) {
+    if (!iframe.isConnected) {
+      this.runtimeContainer.appendChild(this.guestServerFrame);
+      if (this.logger) {
+        this.logger.info(
+          `Guest ${this.id} attached iframe of ${this.url.href}`,
+          this
+        );
+      }
+    }
+    iframe.addEventListener("load", () => {});
+    return this.connectFrame(iframe, key);
+  }
+
+  private async attachGuestServer() {
+    this.guestServerFrame = this.configureFrame(this.guestServerFrame);
+    const { promise } = this.attachFrame(this.guestServerFrame, "TODO");
+    this.guest = await promise;
+    this.apis = this.guest.apis || {};
+    this.isLoaded = true;
+    if (this.logger) {
+      this.logger.info(
+        `Guest ${this.id} established connection, received methods`,
+        this.apis,
+        this
+      );
+    }
+  }
+
+  private configureFrame(iframe: HTMLIFrameElement, key: string, url?: string) {
+    iframe.setAttribute("name", key);
+    iframe.setAttribute("data-uix-guest-key", key);
+    iframe.setAttribute("data-uix-guest-id", this.id);
+    iframe.setAttribute("src", this.createFrameUrl(key, url));
+  }
+
+  private connectFrame(iframe: HTMLIFrameElement, key: string) {
+    this.connection = {
       promise: phantogram<GuestProxyWrapper>(
         {
-          key: this.id,
+          key: iframe.dataset.uixGuestKey,
           remote: iframe,
           targetOrigin: "*",
           timeout: this.timeout,
-          ...opts,
         },
         {
           getSharedContext: () => this.sharedContext,
@@ -363,31 +369,10 @@ export class Port<GuestApi>
     };
   }
 
-  private async connectGuestServer() {
-    const id = makeId(this.id, GUEST_SERVER_ID_SUFFIX);
-    this.frame = this.runtimeContainer.ownerDocument.createElement("iframe");
-    this.frame.setAttribute("src", this.url.href);
-    this.frame.setAttribute("data-uix-guest-id", id);
-    this.runtimeContainer.appendChild(this.frame);
-    if (this.logger) {
-      this.logger.info(
-        `Guest ${this.id} attached iframe of ${this.url.href}`,
-        this
-      );
-    }
-    const { promise } = this.attachFrame(this.frame, {
-      key: id,
-    });
-    this.guest = await promise;
-    this.apis = this.guest.apis || {};
-    this.isLoaded = true;
-    if (this.logger) {
-      this.logger.info(
-        `Guest ${this.id} established connection, received methods`,
-        this.apis,
-        this
-      );
-    }
+  private createFrameUrl(key: string, url: string = "/") {
+    const frameUrl = new URL(url, this.url);
+    frameUrl.searchParams.set("_uix_guest_key", key);
+    return frameUrl.href;
   }
 
   private getHostMethodCallee<T = unknown>(
@@ -449,5 +434,15 @@ export class Port<GuestApi>
     ]) as T;
   }
 
-  // #endregion Private Methods (6)
+  private nextFrameId(): string {
+    let suffix;
+    try {
+      suffix = this.crypto.randomUUID();
+    } catch (e) {
+      suffix = `_unsecure_${Math.random().toString(36).slice(2)}`;
+    }
+    return `${this.id}_${suffix}`;
+  }
+
+  // #endregion Private Methods
 }

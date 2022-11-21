@@ -11,8 +11,12 @@ import { MessageTarget, MessageSource } from "../postables";
 
 /** @internal */
 interface SeparateRemotes {
+  // #region Properties
+
   postTo: MessageTarget;
   receiveFrom: MessageSource;
+
+  // #endregion Properties
 }
 
 /** @internal */
@@ -22,20 +26,32 @@ type Remote = Window | SeparateRemotes;
 type Remoteable = Remote | HTMLIFrameElement;
 
 interface CleanableMessagePort extends MessagePort {
+  // #region Public Methods
+
   [SYM_CLEANUP](): void;
+
+  // #endregion Public Methods
 }
 
 /** @internal */
 export interface TunnelOptions {
+  // #region Properties
+
   key: string;
-  targetOrigin: string;
   remote: Remoteable;
+  targetOrigin: string;
   timeout?: number;
+
+  // #endregion Properties
 }
 
 /** @internal */
 export interface TunnelConfig extends TunnelOptions {
+  // #region Properties
+
   remote: SeparateRemotes;
+
+  // #endregion Properties
 }
 
 function extractRemotePair(remote: Remoteable): SeparateRemotes {
@@ -47,6 +63,11 @@ function extractRemotePair(remote: Remoteable): SeparateRemotes {
     };
   }
   if (remote === window.parent) {
+    if (window.parent === window) {
+      throw new Error(
+        `A configuration with one remote must not use its own window as that remote; that would be a loopback, which phantogram does not support. It's possible that this document at ${window.location.href} was meant to run in an iframe.`
+      );
+    }
     return {
       postTo: window.parent,
       receiveFrom: window,
@@ -188,16 +209,7 @@ export async function createTunnel(
               }
               retractMyOffer();
               const offeredPort = msgEvent.ports[0];
-              try {
-                postTo.postMessage(
-                  TunnelMessage.makeAccepted(key),
-                  targetOrigin
-                );
-              } catch (e) {
-                // if (!e.message.includes("origin")) {
-                throw e;
-                // }
-              }
+              postTo.postMessage(TunnelMessage.makeAccepted(key), targetOrigin);
               choosePort(offeredPort);
             } catch (e) {
               tunnelFail(`Failed to handle handshake_offered event: ${e}`);
@@ -215,15 +227,9 @@ export async function createTunnel(
           }
         };
         receiveFrom.addEventListener("message", receiveHandshake);
-        try {
-          postTo.postMessage(TunnelMessage.makeOffered(key), targetOrigin, [
-            myChannel.port2,
-          ]);
-        } catch (e) {
-          // if (!e.message.includes("origin")) {
-          throw e;
-          // }
-        }
+        postTo.postMessage(TunnelMessage.makeOffered(key), targetOrigin, [
+          myChannel.port2,
+        ]);
       } catch (e) {
         tunnelFail(`Failed to create tunnel: ${e}`);
       }

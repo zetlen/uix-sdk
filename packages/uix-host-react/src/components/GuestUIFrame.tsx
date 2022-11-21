@@ -11,7 +11,6 @@ governing permissions and limitations under the License.
 */
 
 import type { VirtualApi } from "@adobe/uix-core";
-import { GUEST_UI_ID_SUFFIX } from "@adobe/uix-core";
 import React, { useCallback } from "react";
 import type { PropsWithChildren, IframeHTMLAttributes } from "react";
 import { useHost } from "../hooks/useHost.js";

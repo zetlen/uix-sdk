@@ -1,14 +1,17 @@
 {
   "name": "@adobe/uix-core",
-  "version": "0.7.0-4-alpha",
+  "version": "0.6.5-1",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Internal utilities for the UIX SDK",
   "author": "Adobe, Inc,",
-  "module": "dist/esm/index.js",
   "main": "dist/index.js",
   "browser": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsup",
+    "build:esm": "tsup --format esm,cjs",
     "watch": "tsup --watch --silent"
   },
   "browserslist": [

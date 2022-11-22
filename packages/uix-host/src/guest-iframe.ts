@@ -16,7 +16,7 @@ import type {
   Materialized,
   VirtualApi,
 } from "@adobe/uix-core";
-import { GUEST_FRAME_ID_PARAM, Emitter, phantogram } from "@adobe/uix-core";
+import { Emitter, phantogram } from "@adobe/uix-core";
 
 interface GuestProxyWrapper {
   // #region Properties
@@ -122,7 +122,6 @@ export class GuestFrame extends Emitter<NamedEvent> {
 
   private createFrameUrl(key: string, url: string = "/"): URL {
     const frameUrl = new URL(url, this.url);
-    frameUrl.searchParams.set(GUEST_FRAME_ID_PARAM, key);
     return frameUrl;
   }
 

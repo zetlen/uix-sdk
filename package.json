@@ -27,8 +27,8 @@
     "report:api": "node scripts/generate-docs.mjs --no-markdown",
     "report:size": "node scripts/bundler.mjs report",
     "test": "run-s lint test:unit test:subtests",
-    "test:unit": "jest",
-    "test:subtests": "npm run any test"
+    "test:subtests": "npm run any test",
+    "test:unit": "jest"
   },
   "devDependencies": {
     "@adobe/react-spectrum": "^3.20.0",

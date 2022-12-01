@@ -71,6 +71,11 @@ function isFromOrigin(
 
 const { emit: emitOn } = EventEmitter.prototype;
 
+/**
+ * An EventEmitter across two documents. It emits events on the remote document
+ * and takes subscribers from the local document.
+ * @alpha
+ */
 export class Tunnel extends EventEmitter {
   // #region Properties
 
@@ -95,15 +100,12 @@ export class Tunnel extends EventEmitter {
    * Create a Tunnel that connects to the page running in the provided iframe.
    *
    * @remarks
-   * Returns a Promise that resolves with a connected tunnel if the page in the
-   * provided iframe has called {@link toParent}. The tunnel may reconnect if
-   * the iframe reloads, in which case it will emit another "connected" event.
-   *
-   * @example
-   * ```ts
-   * const iframe = document.createElement('iframe');
-   *
-   * ```
+   * Returns a Tunnel that listens for connection requests from the page in the
+   * provided iframe, which it will send periodically until timeout if that page
+   * has called {@link Tunnel.toParent}. If it receives one, the Tunnel will accept the
+   * connection and send an exclusive MessagePort to the phantogram on the other
+   * end. The tunnel may reconnect if the iframe reloads, in which case it will
+   * emit another "connected" event.
    *
    * @alpha
    */
@@ -167,6 +169,17 @@ export class Tunnel extends EventEmitter {
     return tunnel;
   }
 
+  /**
+   * Create a Tunnel that connects to the page running in the parent window.
+   *
+   * @remarks
+   * Returns a Tunnel that starts sending connection requests to the parent
+   * window, sending them periodically until the window responds with an accept
+   * message or the timeout passes. The parent window will accept the request if
+   * it calls {@link Tunnel.toIframe}.
+   *
+   * @alpha
+   */
   static toParent(source: WindowProxy, opts: Partial<TunnelConfig>): Tunnel {
     let retrying: number;
     let timeout: number;

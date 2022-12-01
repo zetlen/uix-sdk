@@ -41,7 +41,7 @@ governing permissions and limitations under the License.
   <script type="module">
     import { connectIframe } from "/@adobe/uix-core/esm";
     import { instrument } from "/instruments.js";
-    const extensions = await fetch('/example-registry')
+    const extensions = await fetch('/example-registry?keywords=phantogram')
       .then(extensionListResponse => extensionListResponse.json())
       .then(extensionList => extensionList.reduce(
         (byId, extension) => ({

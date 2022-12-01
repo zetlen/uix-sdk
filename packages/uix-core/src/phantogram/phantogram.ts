@@ -44,7 +44,7 @@ async function setupApiExchange<T>(
       tunnel.on("api", apiCallback);
 
       const unsubscribe = receiveCalls(
-        tunnel.emit.bind(tunnel, "api"),
+        (api: Asynced<T>) => tunnel.emitLocal("api", api),
         INIT_TICKET,
         new WeakRef(simulator.subject)
       );
@@ -56,7 +56,7 @@ async function setupApiExchange<T>(
         }
       };
       tunnel.on("destroyed", destroy);
-      sendApi(apiToSend).catch(destroy);
+      tunnel.on("connected", () => sendApi(apiToSend).catch(destroy));
     }),
     tunnel.config.timeout,
     () => tunnel.destroy()
@@ -76,6 +76,6 @@ export async function connectIframe<Expected>(
   tunnelOptions: Partial<TunnelConfig>,
   apiToSend: unknown
 ): Promise<Phantogram<Expected>> {
-  const tunnel = await Tunnel.toIframe(frame, tunnelOptions);
+  const tunnel = Tunnel.toIframe(frame, tunnelOptions);
   return setupApiExchange<Expected>(tunnel, apiToSend);
 }

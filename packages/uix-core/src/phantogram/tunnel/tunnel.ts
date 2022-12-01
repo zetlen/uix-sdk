@@ -69,6 +69,8 @@ function isFromOrigin(
   }
 }
 
+const { emit: emitOn } = EventEmitter.prototype;
+
 export class Tunnel extends EventEmitter {
   // #region Properties
 
@@ -138,7 +140,7 @@ export class Tunnel extends EventEmitter {
       window.removeEventListener("message", offerListener);
     };
     timeout = window.setTimeout(() => {
-      tunnel.emit(
+      tunnel.emitLocal(
         "error",
         new Error(
           `Timed out awaiting initial message from iframe after ${config.timeout}ms`
@@ -183,7 +185,7 @@ export class Tunnel extends EventEmitter {
           const portError = new Error(
             "Received handshake accept message, but it did not include a MessagePort to establish tunnel"
           );
-          tunnel.emit("error", portError);
+          tunnel.emitLocal("error", portError);
           return;
         }
         tunnel.connect(event.ports[0]);
@@ -196,7 +198,7 @@ export class Tunnel extends EventEmitter {
     };
 
     timeout = window.setTimeout(() => {
-      tunnel.emit(
+      tunnel.emitLocal(
         "error",
         new Error(
           `Timed out waiting for initial response from parent after ${config.timeout}ms`
@@ -228,7 +230,7 @@ export class Tunnel extends EventEmitter {
     }
     this._messagePort = remote;
     remote.addEventListener("message", this._emitFromMessage);
-    this.emitRemote("connected");
+    this.emit("connected");
     this._messagePort.start();
   }
 
@@ -237,18 +239,22 @@ export class Tunnel extends EventEmitter {
       this._messagePort.close();
       this._messagePort = null;
     }
+    this.emitLocal("destroyed");
     this.emit("destroyed");
-    this.emitRemote("destroyed");
     // this.removeAllListeners(); // TODO: maybe necessary for memory leaks
   }
 
-  emitRemote(type: string, payload?: unknown): boolean {
+  emit(type: string | symbol, payload?: unknown): boolean {
     if (!this._messagePort) {
       return false;
     }
     this._messagePort.postMessage({ type, payload });
     return true;
   }
+
+  emitLocal = (type: string | symbol, payload?: unknown) => {
+    return emitOn.call(this, type, payload);
+  };
 
   // #endregion Public Methods
 
@@ -285,7 +291,7 @@ export class Tunnel extends EventEmitter {
   // #region Private Methods
 
   private _emitFromMessage = ({ data: { type, payload } }: MessageEvent) => {
-    this.emit(type, payload);
+    this.emitLocal(type, payload);
   };
 
   // #endregion Private Methods

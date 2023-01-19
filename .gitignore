@@ -46,6 +46,7 @@ testem.log
 /typings
 *.tsbuildinfo
 .parcel-cache
+*.tgz
 
 # System Files
 .DS_Store

@@ -6,19 +6,19 @@
 
 Returns true if the guest has registered methods matching the provided capability spec. A capability spec is simply an object whose properties are declared in an array of keys, description the names of the functions and methods that the Port will expose.
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
-hasCapabilities(requiredMethods: CapabilitySpec<GuestApis>): boolean;
+hasCapabilities(requiredCapabilities: CapabilitySpec<GuestApis>): boolean;
 ```
 
 ## Parameters
 
 |  Parameter | Type | Description |
 |  --- | --- | --- |
-|  requiredMethods | [CapabilitySpec](./uix-host.capabilityspec.md)<!-- -->&lt;GuestApis&gt; |  |
+|  requiredCapabilities | [CapabilitySpec](./uix-host.capabilityspec.md)<!-- -->&lt;GuestApis&gt; |  |
 
-<b>Returns:</b>
+**Returns:**
 
 boolean
 

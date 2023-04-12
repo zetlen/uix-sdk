@@ -6,8 +6,8 @@
 
 An iframe that attaches to a running GuestServer, to display visible UI pages delivered by the Extension server.
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
-GuestUIFrame: React.ForwardRefExoticComponent<GuestUIProps & React.RefAttributes<unknown>>
+GuestUIFrame: ({ guestId, src, onConnect, onDisconnect, onConnectionError, onResize, methods, sandbox, style, ...customIFrameProps }: GuestUIProps) => JSX.Element
 ```

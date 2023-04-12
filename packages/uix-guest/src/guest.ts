@@ -20,6 +20,7 @@ import type {
 } from "@adobe/uix-core";
 import {
   Emitter,
+  formatHostMethodAddress,
   makeNamespaceProxy,
   connectParentWindow,
   timeoutPromise,
@@ -184,30 +185,22 @@ export class Guest<
       await this.hostConnectionPromise;
       try {
         const result = await timeoutPromise(
-          `Calling host method ${address.path.join(".")}${address.name}(...)`,
+          () => `Calling ${formatHostMethodAddress(address)}`,
           this.hostConnection.getRemoteApi().invokeHostMethod(address),
-          10000,
-          (e) => {
-            this.logger.error(e);
-          }
+          10000
         );
         return result;
       } catch (e) {
         const error =
           e instanceof Error ? e : new Error(e as unknown as string);
-        const methodError = new Error(
-          `Host method call host.${address.path.join(".")}() failed: ${
-            error.message
-          }`
-        );
-        this.logger.error(methodError);
-        throw methodError;
+        this.logger.error(error);
+        throw error;
       }
     }
   );
   private timeout = 10000;
-  private hostConnectionPromise: Promise<CrossRealmObject<HostConnection>>;
-  private hostConnection!: CrossRealmObject<HostConnection>;
+  protected hostConnectionPromise: Promise<CrossRealmObject<HostConnection>>;
+  protected hostConnection!: CrossRealmObject<HostConnection>;
   /** @internal */
   protected getLocalMethods() {
     return {
@@ -248,10 +241,11 @@ export class Guest<
 
       this.hostConnectionPromise = hostConnectionPromise;
       this.hostConnection = await this.hostConnectionPromise;
+      this.emit("connected", { guest: this });
     } catch (e) {
       this.emit("error", { guest: this, error: e });
       this.logger.error("Connection failed!", e);
-      return;
+      throw e;
     }
     try {
       this.sharedContext = new SharedContext(
@@ -260,6 +254,7 @@ export class Guest<
     } catch (e) {
       this.emit("error", { guest: this, error: e });
       this.logger.error("getSharedContext failed!", e);
+      throw e;
     }
   }
 }

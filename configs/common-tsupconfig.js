@@ -32,25 +32,26 @@ const base = {
   entry: ["src/index.ts"], // will be relative to the directory that uses it
   define: {
     UIX_SDK_BUILDMODE: mode,
-    UIX_SDK_VERSION: `"${require("../package.json").version}"`,
+    UIX_SDK_VERSION:
+      process.env.UIX_SDK_VERSION || `"${require("../package.json").version}"`,
   },
   tsconfig: "./tsconfig.json", // see above
   format: ["cjs"],
   platform: "browser",
-  target: "ES2020", // TODO: this is cool, right?
   replaceNodeEnv: true,
   legacyOutput: true,
   treeshake: "recommended",
 };
 
-
 const configs = {
+  /** @type {import("tsup").Options} */
   development: {
     ...base,
     sourcemap: true,
     declarationMap: false,
     splitting: false,
   },
+  /** @type {import("tsup").Options} */
   production: {
     ...base,
     clean: true,

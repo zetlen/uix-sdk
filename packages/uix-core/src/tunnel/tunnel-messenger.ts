@@ -8,6 +8,31 @@ type HandshakeAccepted = WrappedMessage<HandshakeAcceptedTicket>;
 type HandshakeOffered = WrappedMessage<HandshakeOfferedTicket>;
 type HandshakeMessage = HandshakeAccepted | HandshakeOffered;
 
+type ParsedVersion = {
+  major: string;
+  minor: string;
+  patch: string;
+  prerelease: string;
+};
+
+/**
+ * Due to a bug in release for 0.8.0 and 0.8.11, those versions have the
+ * wrong (previous) version number embedded.
+ */
+const VERSION_CORRECTED = {
+  "0.7.0": "0.8.0",
+  "0.8.0": "0.8.1",
+};
+
+function getVersionParts(version: string): ParsedVersion {
+  const realVersion = VERSION_CORRECTED.hasOwnProperty(version)
+    ? VERSION_CORRECTED[version as keyof typeof VERSION_CORRECTED]
+    : version;
+  const [major, minor = "UNKNOWN", suffix = "UNKNOWN"] = realVersion.split(".");
+  const [patch, prerelease = ""] = suffix.split("-");
+  return { major, minor, patch, prerelease };
+}
+const thisVersion = getVersionParts(VERSION);
 export class TunnelMessenger {
   private myOrigin: string;
   private remoteOrigin: string;
@@ -54,6 +79,14 @@ export class TunnelMessenger {
       typeof unwrap(message as HandshakeOffered).offers === "string"
     );
   }
+  isCompatibleVersion(versionString: string) {
+    const version = getVersionParts(versionString);
+    return (
+      version.major === thisVersion.major &&
+      version.minor === thisVersion.minor &&
+      version.prerelease === thisVersion.prerelease
+    );
+  }
   isHandshake(message: unknown): message is HandshakeMessage {
     if (!isWrapped(message)) {
       this.logMalformed(message);
@@ -71,7 +104,10 @@ export class TunnelMessenger {
       return false;
     }
     const { version } = tunnelData;
-    if (version !== VERSION && !this.versionWarnings.has(version)) {
+    if (
+      !this.isCompatibleVersion(version) &&
+      !this.versionWarnings.has(version)
+    ) {
       this.versionWarnings.add(version);
       this.logger.warn(
         `SDK version mismatch. ${this.myOrigin} is using v${VERSION}, but received message from ${this.remoteOrigin} using SDK v${version}. Extensions may be broken or unresponsive.`

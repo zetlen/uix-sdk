@@ -13,15 +13,21 @@ governing permissions and limitations under the License.
 import type {
   Emits,
   GuestConnection,
+  GuestConnectionEvents,
   HostMethodAddress,
-  NamedEvent,
   RemoteHostApis,
   GuestApis,
   CrossRealmObject,
   Unsubscriber,
   VirtualApi,
+  UIHostMethods,
 } from "@adobe/uix-core";
-import { Emitter, connectIframe } from "@adobe/uix-core";
+import {
+  Emitter,
+  connectIframe,
+  formatHostMethodAddress,
+} from "@adobe/uix-core";
+import { normalizeIframe } from "./dom-utils";
 
 /**
  * A specifier for methods to be expected on a remote interface.
@@ -89,28 +95,6 @@ interface GuestProxyWrapper {
 }
 
 /** @public */
-type PortEvent<
-  GuestApi,
-  Type extends string = string,
-  Detail = Record<string, unknown>
-> = NamedEvent<
-  Type,
-  Detail &
-    Record<string, unknown> & {
-      guestPort: Port<GuestApi>;
-    }
->;
-
-/** @public */
-export type PortEvents<
-  GuestApi,
-  HostApi extends Record<string, unknown> = Record<string, unknown>
-> =
-  | PortEvent<GuestApi, "hostprovide">
-  | PortEvent<GuestApi, "unload">
-  | PortEvent<GuestApi, "beforecallhostmethod", HostMethodAddress<HostApi>>;
-
-/** @public */
 export type PortOptions = {
   /**
    * Time in milliseconds to wait for the guest to connect before throwing.
@@ -147,8 +131,8 @@ const defaultOptions = {
  * something we should review.
  * @public
  */
-export class Port<GuestApi>
-  extends Emitter<PortEvents<GuestApi>>
+export class Port<GuestApi = unknown>
+  extends Emitter<GuestConnectionEvents>
   implements GuestConnection
 {
   public get apis() {
@@ -162,7 +146,7 @@ export class Port<GuestApi>
 
   private debug: boolean;
   private logger?: Console;
-  private frame: HTMLIFrameElement;
+  private guestServerFrame: HTMLIFrameElement;
   private hostApis: RemoteHostApis = {};
   private isLoaded = false;
   private runtimeContainer: HTMLElement;
@@ -220,6 +204,7 @@ export class Port<GuestApi>
     const { timeout, debug } = { ...defaultOptions, ...(config.options || {}) };
     this.timeout = timeout;
     this.debug = debug;
+    this.logger = config.logger;
     this.id = config.id;
     this.url = config.url;
     this.runtimeContainer = config.runtimeContainer;
@@ -245,8 +230,18 @@ export class Port<GuestApi>
    * Connect an iframe element which is displaying another page in the extension
    * with the extension's bootstrap frame, so they can share context and events.
    */
-  public attachUI(iframe: HTMLIFrameElement) {
-    return this.attachFrame(iframe);
+  public attachUI<T = unknown>(
+    iframe: HTMLIFrameElement
+  ): Promise<CrossRealmObject<T>> {
+    return this.attachFrame(iframe, {
+      onIframeResize: (dimensions: { height: number; width: number }) => {
+        this.emit("guestresize", {
+          dimensions,
+          guestPort: this,
+          iframe: iframe,
+        });
+      },
+    } as UIHostMethods);
   }
 
   /**
@@ -255,22 +250,14 @@ export class Port<GuestApi>
    * declared in an array of keys, description the names of the functions and
    * methods that the Port will expose.
    */
-  public hasCapabilities(requiredMethods: CapabilitySpec<GuestApis>) {
+  public hasCapabilities(requiredCapabilities: CapabilitySpec<GuestApis>) {
     this.assertReady();
-    return Object.keys(requiredMethods).every((key) => {
-      if (!Reflect.has(this.apis, key)) {
-        return false;
-      }
-      const api = this.apis[key];
-      const methodList = requiredMethods[
-        key as keyof typeof requiredMethods
-      ] as string[];
-      return methodList.every(
-        (methodName: string) =>
-          Reflect.has(api, methodName) &&
-          typeof api[methodName as keyof typeof api] === "function"
-      );
-    });
+    return (
+      this.apis &&
+      Object.entries(requiredCapabilities).every(([apiName, methodNames]) =>
+        this.hasCapability(apiName, methodNames as string[])
+      )
+    );
   }
 
   /**
@@ -286,10 +273,9 @@ export class Port<GuestApi>
    */
   public async load() {
     try {
-      if (!this.apis) {
+      if (!this.isLoaded) {
         await this.connect();
       }
-      return this.apis;
     } catch (e) {
       this.guestServer = null;
       this.error = e instanceof Error ? e : new Error(String(e));
@@ -300,9 +286,13 @@ export class Port<GuestApi>
   /**
    * The host-side equivalent of {@link @adobe/uix-guest#register}. Pass a set
    * of methods down to the guest as proxies.
+   * Merges at the first level, the API level. Overwrites a deeper levels.
    */
   public provide(apis: RemoteHostApis) {
-    Object.assign(this.hostApis, apis);
+    for (const [apiNamespace, methods] of Object.entries(apis)) {
+      this.hostApis[apiNamespace] = this.hostApis[apiNamespace] || {};
+      Object.assign(this.hostApis[apiNamespace], methods);
+    }
     this.emit("hostprovide", { guestPort: this, apis });
   }
 
@@ -310,9 +300,9 @@ export class Port<GuestApi>
    * Disconnect from the extension.
    */
   public async unload(): Promise<void> {
-    if (this.frame && this.frame.parentElement) {
-      this.frame.parentElement.removeChild(this.frame);
-      this.frame = undefined;
+    if (this.guestServerFrame && this.guestServerFrame.parentElement) {
+      this.guestServerFrame.parentElement.removeChild(this.guestServerFrame);
+      this.guestServerFrame = undefined;
     }
     this.emit("unload", { guestPort: this });
   }
@@ -320,6 +310,17 @@ export class Port<GuestApi>
   // #endregion Public Methods (6)
 
   // #region Private Methods (6)
+
+  private hasCapability(apiName: string, methodNames: string[]) {
+    const api = this.apis[apiName];
+    return (
+      api &&
+      methodNames.every(
+        (methodName: keyof typeof api) =>
+          Reflect.has(api, methodName) && typeof api[methodName] === "function"
+      )
+    );
+  }
 
   private assert(
     condition: boolean,
@@ -336,34 +337,44 @@ export class Port<GuestApi>
     this.assert(this.isReady(), () => "Attempted to interact before loaded");
   }
 
-  private attachFrame<T = unknown>(iframe: HTMLIFrameElement) {
+  private attachFrame<T = unknown>(
+    iframe: HTMLIFrameElement,
+    addedMethods: object = {}
+  ) {
+    // at least this is necessary
+    normalizeIframe(iframe);
+    this.logger.log("attachFrame", iframe);
     return connectIframe<T>(
       iframe,
       {
         logger: this.logger,
-        targetOrigin: "*",
+        targetOrigin: this.url.origin,
         timeout: this.timeout,
       },
       {
         getSharedContext: () => this.sharedContext,
         invokeHostMethod: (address: HostMethodAddress) =>
           this.invokeHostMethod(address),
+        ...addedMethods,
       }
     );
   }
 
   private async connect() {
-    this.frame = this.runtimeContainer.ownerDocument.createElement("iframe");
-    this.frame.setAttribute("src", this.url.href);
-    this.frame.setAttribute("data-uix-guest", "true");
-    this.runtimeContainer.appendChild(this.frame);
+    const serverFrame =
+      this.runtimeContainer.ownerDocument.createElement("iframe");
+    normalizeIframe(serverFrame);
+    serverFrame.setAttribute("aria-hidden", "true");
+    serverFrame.setAttribute("src", this.url.href);
+    this.guestServerFrame = serverFrame;
+    this.runtimeContainer.appendChild(serverFrame);
     if (this.logger) {
       this.logger.info(
         `Guest ${this.id} attached iframe of ${this.url.href}`,
         this
       );
     }
-    this.guestServer = await this.attachFrame<GuestProxyWrapper>(this.frame);
+    this.guestServer = await this.attachFrame<GuestProxyWrapper>(serverFrame);
     this.isLoaded = true;
     if (this.logger) {
       this.logger.info(
@@ -378,8 +389,7 @@ export class Port<GuestApi>
     { name, path }: HostMethodAddress,
     methodSource: RemoteHostApis
   ): RemoteHostApis<VirtualApi> {
-    const dots = (level: number) =>
-      `uix.host.${path.slice(0, level).join(".")}`;
+    const dots = (level: number) => `host.${path.slice(0, level).join(".")}`;
     const methodCallee = path.reduce((current, prop, level) => {
       this.assert(
         Reflect.has(current, prop),
@@ -419,7 +429,10 @@ export class Port<GuestApi>
       try {
         methodCallee = this.getHostMethodCallee(address, privateMethods);
       } catch (e) {
-        this.logger.warn("Private method not found!", address);
+        this.logger.warn(
+          `Private method ${formatHostMethodAddress(address)} not found!`,
+          address
+        );
       }
     }
     if (!methodCallee) {

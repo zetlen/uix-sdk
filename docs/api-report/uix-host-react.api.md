@@ -4,7 +4,11 @@
 
 ```ts
 
+/// <reference types="react" />
+
+import type { AttrTokens } from '@adobe/uix-host';
 import type { CapabilitySpec } from '@adobe/uix-host';
+import { Context } from 'react';
 import type { ExtensionsProvider } from '@adobe/uix-host';
 import type { GuestApis } from '@adobe/uix-core';
 import type { GuestConnection } from '@adobe/uix-core';
@@ -13,10 +17,11 @@ import { HostConfig } from '@adobe/uix-host';
 import type { IframeHTMLAttributes } from 'react';
 import type { PortOptions } from '@adobe/uix-host';
 import type { PropsWithChildren } from 'react';
-import { default as React_2 } from 'react';
 import type { RemoteGuestApis } from '@adobe/uix-core';
+import type { SandboxToken } from '@adobe/uix-host';
 import type { SharedContextValues } from '@adobe/uix-host';
-import type { VirtualApi } from '@adobe/uix-core';
+import { UIFrameRect } from '@adobe/uix-core';
+import { VirtualApi } from '@adobe/uix-core';
 
 // @public
 export function Extensible({ appName, children, extensionsProvider, guestOptions, runtimeContainer, debug, sharedContext, }: PropsWithChildren<ExtensibleProps>): JSX.Element;
@@ -35,8 +40,11 @@ export interface ExtensibleProps extends Omit<HostConfig, "hostName"> {
     sharedContext?: SharedContextValues;
 }
 
+// @internal (undocumented)
+export const ExtensionContext: Context<Host>;
+
 // @public
-export const GuestUIFrame: React_2.ForwardRefExoticComponent<GuestUIProps & React_2.RefAttributes<unknown>>;
+export const GuestUIFrame: ({ guestId, src, onConnect, onDisconnect, onConnectionError, onResize, methods, sandbox, style, ...customIFrameProps }: GuestUIProps) => JSX.Element;
 
 // Warning: (ae-forgotten-export) The symbol "FrameProps" needs to be exported by the entry point index.d.ts
 //
@@ -45,12 +53,12 @@ export interface GuestUIProps extends FrameProps {
     // (undocumented)
     guestId: string;
     methods?: VirtualApi;
-    onConnect?: () => unknown;
+    onConnect?: () => void;
     onConnectionError?: (error: Error) => void;
-    onDisconnect?: () => unknown;
-    src?: string;
-    // (undocumented)
-    width: FrameProps["width"];
+    onDisconnect?: () => void;
+    onResize?: (dimensions: UIFrameRect) => void;
+    sandbox?: AttrTokens<SandboxToken>;
+    src: string;
 }
 
 // @public (undocumented)
@@ -93,6 +101,10 @@ export function useHost(): UseHostResponse;
 
 
 export * from "@adobe/uix-host";
+
+// Warnings were encountered during analysis:
+//
+// src/components/GuestUIFrame.tsx:28:1 - (ae-forgotten-export) The symbol "ReactIframeProps" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

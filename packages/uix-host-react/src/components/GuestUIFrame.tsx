@@ -10,15 +10,22 @@ OF ANY KIND, either express or implied. See the License for the specific languag
 governing permissions and limitations under the License.
 */
 
-import type { VirtualApi } from "@adobe/uix-core";
-import React, { useEffect, useImperativeHandle, useRef } from "react";
-import type { PropsWithChildren, IframeHTMLAttributes } from "react";
+import { CrossRealmObject, UIFrameRect, VirtualApi } from "@adobe/uix-core";
+import React, { useEffect, useRef } from "react";
+import type { IframeHTMLAttributes } from "react";
 import { useHost } from "../hooks/useHost.js";
+import type { AttrTokens, SandboxToken } from "@adobe/uix-host";
+import { makeSandboxAttrs, requiredIframeProps } from "@adobe/uix-host";
+
+/**
+ * @internal
+ */
+type ReactIframeProps = IframeHTMLAttributes<HTMLIFrameElement>;
 
 /**
  * @public
  */
-type FrameProps = IframeHTMLAttributes<HTMLIFrameElement>;
+type FrameProps = Omit<ReactIframeProps, "sandbox">;
 
 /** @public */
 export interface GuestUIProps extends FrameProps {
@@ -26,106 +33,144 @@ export interface GuestUIProps extends FrameProps {
   /**
    * Receives the Penpal context when the frame is mounted.
    */
-  onConnect?: () => unknown;
+  onConnect?: () => void;
   /**
    * Called when the frame disconnects and unmounts.
    */
-  onDisconnect?: () => unknown;
+  onDisconnect?: () => void;
   /**
    * Called when the connection process throws an exception
    */
   onConnectionError?: (error: Error) => void;
   /**
+   * Called when the document in the iframe changes size.
+   */
+  onResize?: (dimensions: UIFrameRect) => void;
+  /**
+   * Additional sandbox attributes GuestUIFrame might need.
+   */
+  sandbox?: AttrTokens<SandboxToken>;
+  /**
    * Optional custom URL or path.
    */
-  src?: string;
+  src: string;
   /**
    * Host methods to provide only to the guest inside this iframe.
    */
   methods?: VirtualApi;
-
-  /**
-   *
-   * @defaultValue "100%"
-   */
-  width: FrameProps["width"];
 }
 
-const defaultFrameProps: FrameProps = {
+const defaultIFrameProps: FrameProps = {
   width: "100%",
   height: "100%",
-  sandbox: "allow-scripts",
   style: {
     border: "none",
   },
 };
+
+const defaultSandbox = "allow-scripts allow-forms allow-same-origin";
 
 /**
  * An iframe that attaches to a running GuestServer, to display visible UI pages
  * delivered by the Extension server.
  * @public
  */
-export const GuestUIFrame = React.forwardRef(function GuestUIFrame(
-  {
-    guestId,
-    src = "",
-    onConnect,
-    onDisconnect,
-    onConnectionError,
-    methods,
-    ...customFrameProps
-  }: PropsWithChildren<GuestUIProps>,
-  ref
-) {
+export const GuestUIFrame = ({
+  guestId,
+  src = "",
+  onConnect,
+  onDisconnect,
+  onConnectionError,
+  onResize,
+  methods,
+  sandbox = "",
+  style,
+  ...customIFrameProps
+}: GuestUIProps) => {
+  const ref = useRef<HTMLIFrameElement>();
   const { host } = useHost();
   if (!host) {
     return null;
   }
   const guest = host.guests.get(guestId);
   const frameUrl = new URL(src, guest.url.href);
-  const iframeRef = useRef<HTMLIFrameElement>();
-  useImperativeHandle(ref, () => iframeRef.current);
 
   useEffect(() => {
-    if (iframeRef.current) {
+    if (ref.current) {
+      let mounted = true;
+      let connection: CrossRealmObject<VirtualApi>;
+      const connectionFrame = ref.current;
       if (methods) {
         guest.provide(methods);
       }
-      const connection = guest.attachUI(iframeRef.current, methods);
-      connection
-        .then(() => {
-          if (onConnect) {
+      const connecting = guest.attachUI(connectionFrame);
+      connecting
+        .then((c) => {
+          connection = c;
+          if (!mounted) {
+            c.tunnel.destroy();
+          } else if (onConnect) {
             onConnect();
           }
         })
         .catch((error: Error) => {
-          if (onConnectionError) onConnectionError(error);
-          else throw error;
+          if (mounted && !connection && connectionFrame === ref.current) {
+            const frameError = new Error(
+              `GuestUIFrame connection failed: ${
+                (error && error.stack) || error
+              }`
+            );
+            Object.assign(frameError, {
+              original: error,
+              ref,
+              guest,
+              host,
+            });
+            if (onConnectionError) onConnectionError(frameError);
+          }
         });
       return () => {
-        if (onDisconnect) {
-          try {
-            onDisconnect();
-          } catch (e) {
-            console.error(e);
-          }
-          guest.unload();
+        mounted = false;
+        if (connection) {
+          connection.tunnel.destroy();
         }
       };
     }
   }, []);
 
-  const frameProps = { ...defaultFrameProps, ...customFrameProps };
+  useEffect(() => {
+    if (ref.current && onResize) {
+      const currentFrame = ref.current;
+      return guest.addEventListener(
+        "guestresize",
+        ({ detail: { guestPort, iframe, dimensions } }) => {
+          if (guestPort.id === guest.id && iframe === currentFrame) {
+            onResize(dimensions);
+          }
+        }
+      );
+    }
+  }, [ref.current, guest.id, onResize]);
 
   return (
     <iframe
-      ref={iframeRef}
+      {...defaultIFrameProps}
+      ref={ref}
       src={frameUrl.href}
       name={`uix-guest-${guest.id}`}
-      {...frameProps}
-      sandbox="allow-scripts allow-downloads allow-same-origin allow-presentation"
+      sandbox={
+        sandbox
+          ? makeSandboxAttrs(defaultSandbox, sandbox).join(" ")
+          : defaultSandbox
+      }
+      style={
+        style
+          ? { ...style, ...defaultIFrameProps.style }
+          : defaultIFrameProps.style
+      }
+      {...customIFrameProps}
+      {...requiredIframeProps}
     />
   );
-});
-
-GuestUIFrame.displayName = "GuestUIFrame";
+};
+export default GuestUIFrame;

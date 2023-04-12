@@ -10,18 +10,6 @@ OF ANY KIND, either express or implied. See the License for the specific languag
 governing permissions and limitations under the License.
 */
 
-/** @type {import("tsup").Options} */
-const base = {
-  entry: ["src/index.ts"], // will be relative to the directory that uses it
-  tsconfig: "./tsconfig.json", // see above
-  format: ["cjs"],
-  platform: "browser",
-  target: "ES2020", // TODO: this is cool, right?
-  replaceNodeEnv: true,
-  legacyOutput: true,
-  treeshake: "recommended"
-};
-
 const allowedModes = ["development", "production", "report"];
 
 let mode = process.env.UIX_SDK_BUILDMODE;
@@ -39,13 +27,31 @@ if (!mode) {
   process.exit(1);
 }
 
+/** @type {import("tsup").Options} */
+const base = {
+  entry: ["src/index.ts"], // will be relative to the directory that uses it
+  define: {
+    UIX_SDK_BUILDMODE: mode,
+    UIX_SDK_VERSION:
+      process.env.UIX_SDK_VERSION || `"${require("../package.json").version}"`,
+  },
+  tsconfig: "./tsconfig.json", // see above
+  format: ["cjs"],
+  platform: "browser",
+  replaceNodeEnv: true,
+  legacyOutput: true,
+  treeshake: "recommended",
+};
+
 const configs = {
+  /** @type {import("tsup").Options} */
   development: {
     ...base,
     sourcemap: true,
     declarationMap: false,
     splitting: false,
   },
+  /** @type {import("tsup").Options} */
   production: {
     ...base,
     clean: true,
